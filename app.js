@@ -2,8 +2,8 @@ import http from "http";
 import { InvokeCommand, LambdaClient, LogType } from "@aws-sdk/client-lambda";
 import { curry, defaultTo } from "ramda";
 
+// AWS SDK constants
 const DEFAULT_REGION = "us-east-1";
-
 const orDefaultRegion = defaultTo(DEFAULT_REGION);
 
 const createClientForRegion = curry(
@@ -12,8 +12,9 @@ const createClientForRegion = curry(
 );
 
 const createClientForDefaultRegion = createClientForRegion(null);
-const FUNC_NAME = "GetRandom";
+const FUNC_NAME = "GetRandom"; // AWS Lambda function
 
+// invoke AWS Lambda function - adapted from AWS SDK samples
 const invoke = async (FUNC_NAME, payload) => {
   const client = createClientForDefaultRegion(LambdaClient);
   const command = new InvokeCommand({
@@ -28,12 +29,13 @@ const invoke = async (FUNC_NAME, payload) => {
   return { logs, result };
 };
 
-// full parallel flow for generating random numbers
+// full parallel flow for handling web requests
 async function dispatch(randomNumbers, callback) {
   const { logs, result } = await invoke(FUNC_NAME, randomNumbers);
   callback(null, result);
 }
 
+// complete the response once all of the data requests are completed
 function finalResponse(res, randomValues, result) {  
   res.statusCode = 200;
   res.setHeader('Content-Type', 'text/plain');
@@ -51,10 +53,11 @@ function finalResponse(res, randomValues, result) {
 const hostname = 'localhost';
 const port = 3000;
 
-// request handler
+// web request handler
 const server = http.createServer((req, res) => {
   let params = {};
   let myURL = {};
+  // use the provided URL or attempt to default to localhost if blank
   try {
     myURL = new URL(req.url);
   } catch (error) {
@@ -68,6 +71,7 @@ const server = http.createServer((req, res) => {
     }
   }
 
+  // extract parameters from the URL
   params = {
     min: parseInt(myURL.searchParams.get('min')),
     max: parseInt(myURL.searchParams.get('max')),
@@ -76,22 +80,26 @@ const server = http.createServer((req, res) => {
 
   // check invalid input conditions
   if (params.count <= 0 || !Number.isFinite(params.min) || !Number.isFinite(params.max) || params.max < params.min) {
-    // TODO: return useful error response
+    // TODO: return useful error response, organize response handling more cohesively
     res.statusCode = 200;
     res.setHeader('Content-Type', 'text/plain');
     res.end();
     return;
   }
 
+  // construct requests to pass into flow
   const randomNumberRequests = new Array(params.count).fill(0).map(() => ({
     min: params.min, max: params.max }));
 
+  // block-scope variables to track web request stats
   let count = 0;
   let success = 0;
   const failed = [];
 
-  let values = [];
+  // return values for web request - this will be populated by the random numbers generated via AWS Lambda
+  const values = [];
 
+  // send requests in parallel - dispatch function is async
   randomNumberRequests.forEach(function (randomNumber) {
     dispatch(randomNumber, function (err, value) {
       if (!err) {
@@ -100,8 +108,10 @@ const server = http.createServer((req, res) => {
       } else {
         failed.push(randomNumber.name);
       }
+      
       count += 1;
   
+      // once all data requests complete, formulate the web response
       if (count === randomNumberRequests.length) {
         finalResponse(res, values, {
           count,
