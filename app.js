@@ -68,10 +68,20 @@ const server = http.createServer((req, res) => {
     }
   }
 
-  // TODO: more idiomatic approach?
-  params.min = parseInt(myURL.searchParams.get('min'));
-  params.max = parseInt(myURL.searchParams.get('max'));
-  params.count = parseInt(myURL.searchParams.get('count'));
+  params = {
+    min: parseInt(myURL.searchParams.get('min')),
+    max: parseInt(myURL.searchParams.get('max')),
+    count: parseInt(myURL.searchParams.get('count'))
+  }
+
+  // check invalid input conditions
+  if (params.count <= 0 || !Number.isFinite(params.min) || !Number.isFinite(params.max) || params.max < params.min) {
+    // TODO: return useful error response
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'text/plain');
+    res.end();
+    return;
+  }
 
   const randomNumberRequests = new Array(params.count).fill(0).map(() => ({
     min: params.min, max: params.max }));
